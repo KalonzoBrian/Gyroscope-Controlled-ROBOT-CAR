@@ -193,6 +193,7 @@ GND   → Power Supply - & Arduino GND
 
 - [L298N DC Motor Driver Tutorial](https://lastminuteengineers.com/l298n-dc-stepper-driver-arduino-tutorial/)
 - [GY-87 & MPU6050 Interfacing Guide](https://electropeak.com/learn/interfacing-gy-87-10dof-imu-mpu6050-hmc5883l-bmp085-module-with-arduino/)
+- >[HC 05 Bluetooth module guide](https://projecthub.arduino.cc/RucksikaaR/interfacing-the-hc-06-bluetooth-module-with-arduino-94aabd)
 
 ---
 
