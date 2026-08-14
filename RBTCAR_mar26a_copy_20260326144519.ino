@@ -1,87 +1,136 @@
-// Motor A connections
-int enA = 9;
-int in1 = 8;
-int in2 = 7;
-// Motor B connections
-int enB = 3;
-int in3 = 5;
-int in4 = 4;
+#include <Wire.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <math.h>
+
+Adafruit_MPU6050 mpu;
+
+// =====================================================
+// SETTINGS
+// =====================================================
+
+const float TILT_THRESHOLD = 15.0;
+
+// Send command every 100 ms
+const unsigned long SEND_INTERVAL = 100;
+
+unsigned long lastSendTime = 0;
+
+char currentCommand = 'S';
+
+
+// =====================================================
+// SETUP
+// =====================================================
 
 void setup() {
-  // Set all the motor control pins to outputs
-  pinMode(enA, OUTPUT);
-  pinMode(enB, OUTPUT);
-  pinMode(in1, OUTPUT);
-  pinMode(in2, OUTPUT);
-  pinMode(in3, OUTPUT);
-  pinMode(in4, OUTPUT);
 
-  // Turn off motors - Initial state
-  digitalWrite(in1, LOW);
-  digitalWrite(in2, LOW);
-  digitalWrite(in3, LOW);
-  digitalWrite(in4, LOW);
+  // HC-05 connected to hardware Serial
+  // D0 = RX
+  // D1 = TX
+
+  Serial.begin(9600);
+
+  Wire.begin();
+
+  // ---------------------------------------------------
+  // MPU6050
+  // ---------------------------------------------------
+
+  if (!mpu.begin(0x68)) {
+
+    // If sensor fails, transmit STOP continuously
+    while (1) {
+      Serial.write('S');
+      delay(100);
+    }
+  }
+
+  // Sensor configuration
+  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+
+  // Start safely
+  Serial.write('S');
+
+  lastSendTime = millis();
 }
+
+
+// =====================================================
+// MAIN LOOP
+// =====================================================
 
 void loop() {
-  directionControl();
-  delay(1000);
-  speedControl();
-  delay(1000);
-}
 
-// This function lets you control spinning direction of motors
-void directionControl() {
-  // Set motors to maximum speed
-  digitalWrite(enA, HIGH);
-  digitalWrite(enB, HIGH);
+  sensors_event_t accel;
+  sensors_event_t gyro;
+  sensors_event_t temp;
 
-  // Turn on motor A & B
-  digitalWrite(in1, HIGH);
-  digitalWrite(in2, LOW);
-  digitalWrite(in3, HIGH);
-  digitalWrite(in4, LOW);
-  delay(2000);
+  mpu.getEvent(&accel, &gyro, &temp);
 
-  // Now change motor directions
-  digitalWrite(in1, LOW);
-  digitalWrite(in2, HIGH);
-  digitalWrite(in3, LOW);
-  digitalWrite(in4, HIGH);
-  delay(2000);
 
-  // Turn off motors
-  digitalWrite(in1, LOW);
-  digitalWrite(in2, LOW);
-  digitalWrite(in3, LOW);
-  digitalWrite(in4, LOW);
-}
+  // ---------------------------------------------------
+  // Convert acceleration to g
+  // ---------------------------------------------------
 
-// This function lets you control speed of the motors
-void speedControl() {
-  // Turn on motors
-  digitalWrite(in1, LOW);
-  digitalWrite(in2, HIGH);
-  digitalWrite(in3, LOW);
-  digitalWrite(in4, HIGH);
+  float ax = accel.acceleration.x / 9.80665;
+  float ay = accel.acceleration.y / 9.80665;
+  float az = accel.acceleration.z / 9.80665;
 
-  // Accelerate from zero to maximum speed
-  for (int i = 0; i < 256; i++) {
-    analogWrite(enA, i);
-    analogWrite(enB, i);
-    delay(20);
+
+  // ---------------------------------------------------
+  // Calculate roll and pitch
+  // ---------------------------------------------------
+
+  float roll =
+    atan2(ay, az) * 180.0 / PI;
+
+  float pitch =
+    atan2(
+      -ax,
+      sqrt((ay * ay) + (az * az))
+    ) * 180.0 / PI;
+
+
+  // ---------------------------------------------------
+  // Determine command
+  // ---------------------------------------------------
+
+  currentCommand = 'S';
+
+  if (pitch > TILT_THRESHOLD) {
+
+    currentCommand = 'F';
+
+  }
+  else if (pitch < -TILT_THRESHOLD) {
+
+    currentCommand = 'B';
+
+  }
+  else if (roll > TILT_THRESHOLD) {
+
+    currentCommand = 'R';
+
+  }
+  else if (roll < -TILT_THRESHOLD) {
+
+    currentCommand = 'L';
   }
 
-  // Decelerate from maximum speed to zero
-  for (int i = 255; i >= 0; --i) {
-    analogWrite(enA, i);
-    analogWrite(enB, i);
-    delay(20);
+
+  // ---------------------------------------------------
+  // CONTINUOUS TRANSMISSION
+  // ---------------------------------------------------
+
+  if (millis() - lastSendTime >= SEND_INTERVAL) {
+
+    Serial.write(currentCommand);
+
+    lastSendTime = millis();
   }
 
-  // Now turn off motors
-  digitalWrite(in1, LOW);
-  digitalWrite(in2, LOW);
-  digitalWrite(in3, LOW);
-  digitalWrite(in4, LOW);
+  delay(10);
 }
